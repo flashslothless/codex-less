@@ -2,28 +2,36 @@ mod bash_selection;
 mod constants;
 mod os_release;
 mod platform;
+mod server;
 mod types;
 
 use crate::bash_selection::resolve_bash_path;
 use crate::os_release::read_os_release;
 use crate::platform::detect_platform;
 use crate::platform::resolve_target_triple;
+use crate::server::ShellToolServer;
 use crate::types::HostOs;
 use crate::types::OsReleaseInfo;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
-use signal_hook::consts::signal::SIGHUP;
-use signal_hook::consts::signal::SIGINT;
-use signal_hook::consts::signal::SIGTERM;
-use signal_hook::iterator::Signals;
+use clap::Parser;
 use std::env;
-use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
-use std::process::{self};
+
+#[derive(Debug, Parser)]
+struct Cli {
+    /// Root directory for file and command tools.
+    #[arg(long, default_value = ".")]
+    root: PathBuf,
+
+    /// Override the Bash binary instead of using the vendored selector.
+    #[arg(long)]
+    bash: Option<PathBuf>,
+}
 
 fn find_vendor_root() -> Result<PathBuf> {
     let exe_path = env::current_exe().context("Unable to locate current executable")?;
@@ -79,81 +87,34 @@ fn select_darwin_release(os: HostOs) -> Result<Option<String>> {
     }
 }
 
-fn spawn_server(
-    server_path: &Path,
-    execve_wrapper: &Path,
-    bash_path: &Path,
-    passthrough_args: impl Iterator<Item = String>,
-) -> Result<i32> {
-    let mut command = Command::new(server_path);
-    command
-        .arg("--execve")
-        .arg(execve_wrapper)
-        .arg("--bash")
-        .arg(bash_path)
-        .args(passthrough_args)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-
-    let mut child = command
-        .spawn()
-        .with_context(|| format!("Failed to spawn {}", server_path.display()))?;
-    let pid = child.id();
-
-    let mut signals =
-        Signals::new([SIGINT, SIGTERM, SIGHUP]).context("Failed to set up signal forwarding")?;
-    let handle = signals.handle();
-    let signal_thread = std::thread::spawn(move || {
-        for signal in signals.forever() {
-            let _ = unsafe { libc::kill(pid as i32, signal) };
-        }
-    });
-
-    let status = child
-        .wait()
-        .context("Failed to wait for codex-exec-mcp-server")?;
-    handle.close();
-    let _ = signal_thread.join();
-
-    if let Some(signal) = status.signal() {
-        unsafe {
-            libc::raise(signal);
-        }
-        Ok(1)
-    } else {
-        Ok(status.code().unwrap_or(1))
-    }
-}
-
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
     let platform = detect_platform()?;
     let target_triple = resolve_target_triple(platform)?;
 
-    let vendor_root = find_vendor_root()?;
-    let target_root = vendor_root.join(target_triple);
-    let execve_wrapper = target_root.join("codex-execve-wrapper");
-    let server_path = target_root.join("codex-exec-mcp-server");
+    let bash_path = if let Some(bash) = cli.bash {
+        bash.canonicalize()
+            .with_context(|| format!("Failed to canonicalize bash override {}", bash.display()))?
+    } else {
+        let vendor_root = find_vendor_root()?;
+        let target_root = vendor_root.join(target_triple);
 
-    let os_info = select_os_info(platform.os);
-    let darwin_release = select_darwin_release(platform.os)?;
-    let bash_selection = resolve_bash_path(
-        &target_root,
-        platform.os,
-        darwin_release.as_deref(),
-        os_info.as_ref(),
-    )?;
+        let os_info = select_os_info(platform.os);
+        let darwin_release = select_darwin_release(platform.os)?;
+        let bash_selection = resolve_bash_path(
+            &target_root,
+            platform.os,
+            darwin_release.as_deref(),
+            os_info.as_ref(),
+        )?;
+        require_exists(&bash_selection.path, "Bash binary")?;
+        bash_selection.path
+    };
 
-    require_exists(&execve_wrapper, "execve wrapper")?;
-    require_exists(&server_path, "server binary")?;
-    require_exists(&bash_selection.path, "Bash binary")?;
-
-    let exit_code = spawn_server(
-        &server_path,
-        &execve_wrapper,
-        &bash_selection.path,
-        env::args().skip(1),
-    )?;
-
-    process::exit(exit_code);
+    let server = ShellToolServer::new(cli.root, bash_path)?;
+    let running = server.serve_stdio().await?;
+    running.waiting().await?;
+    tokio::task::yield_now().await;
+    Ok(())
 }
