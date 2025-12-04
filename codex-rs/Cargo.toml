@@ -26,6 +26,7 @@ members = [
     "login",
     "mcp-server",
     "mcp-types",
+    "shell-tool-mcp",
     "ollama",
     "process-hardening",
     "protocol",

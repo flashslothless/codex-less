@@ -1,0 +1,16 @@
+[package]
+name = "codex-shell-tool-mcp"
+version = "0.0.0"
+edition = "2024"
+authors = ["OpenAI"]
+description = "Launcher for the shell MCP server with bundled bash variants"
+license = "Apache-2.0"
+
+[dependencies]
+anyhow = "1"
+libc = "0.2"
+signal-hook = "0.3"
+thiserror = "2"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
