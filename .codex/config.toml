@@ -11,3 +11,17 @@ wire_api = "chat"
 
 [profiles.chat]
 model_provider = "dashscope"
+
+[mcp_servers.shell_tool]
+command = "cargo"
+cwd = "codex-rs"
+args = [
+  "run",
+  "-p",
+  "codex-exec-mcp-server",
+  "--",
+  "--execve",
+  "target/debug/codex-execve-wrapper",
+  "--bash",
+  "/bin/bash",
+]
