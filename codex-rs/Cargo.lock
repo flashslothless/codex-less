@@ -1555,10 +1555,19 @@ name = "codex-shell-tool-mcp"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "base64",
+ "clap",
  "libc",
  "pretty_assertions",
- "signal-hook",
- "thiserror 2.0.17",
+ "reqwest",
+ "rmcp",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
+ "uuid",
 ]
 
 [[package]]

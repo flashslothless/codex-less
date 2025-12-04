@@ -1,22 +1,30 @@
 # codex-shell-tool-mcp
 
-A Rust launcher that wraps the `codex-exec-mcp-server` binary and its helpers. It picks the correct vendored artifacts for the current platform and forwards `--execve` and `--bash` to the MCP server.
+A Rust MCP server that provides shell, file, and HTTP fetch tools over STDIO. It reuses the vendored Bash selector to choose a compatible shell for the host platform and exposes a background-aware command runner alongside file helpers.
 
 ## Usage
 
-Build the crate and invoke the launcher (it forwards all additional arguments to `codex-exec-mcp-server`):
+Run the server directly over STDIO. The process blocks until the MCP client disconnects:
 
 ```bash
-cargo run -p codex-shell-tool-mcp -- --help
+cargo run -p codex-shell-tool-mcp -- --root /your/workspace
 ```
 
 The binary looks for a `vendor/` directory next to the executable (and falls back to the crate root). That directory is expected to contain per-target subdirectories with:
 
-- `codex-exec-mcp-server`
-- `codex-execve-wrapper`
 - `bash/<variant>/bash` built for multiple glibc baselines and macOS releases.
 
-Linux hosts read `/etc/os-release` to choose the closest matching Bash variant. macOS hosts use the Darwin major version (from `uname -r`) to pick a compatible build.
+Linux hosts read `/etc/os-release` to choose the closest matching Bash variant. macOS hosts use the Darwin major version (from `uname -r`) to pick a compatible build. You can bypass the selector by passing `--bash /path/to/bash`.
+
+### Tools
+
+- **read**: Read a file within `--root` as UTF-8 or base64.
+- **write**: Create or overwrite a file with UTF-8 or base64 input.
+- **edit**: Replace the first occurrence of a string in a file.
+- **bash**: Run a shell command in the foreground or background (returns a `session_id`).
+- **bash-output**: Stream buffered output from a background session.
+- **kill-shell**: Send SIGTERM to a background session.
+- **web-fetch**: Fetch HTTP/HTTPS responses with an optional timeout.
 
 ## Development
 
