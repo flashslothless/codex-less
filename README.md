@@ -91,7 +91,6 @@ See the [Execpolicy quickstart](./docs/execpolicy.md) to set up rules that gover
   - [Login on a "Headless" machine](./docs/authentication.md#connecting-on-a-headless-machine)
 - **Automating Codex**
   - [GitHub Action](https://github.com/openai/codex-action)
-  - [TypeScript SDK](./sdk/typescript/README.md)
   - [Non-interactive mode (`codex exec`)](./docs/exec.md)
 - [**Advanced**](./docs/advanced.md)
   - [Tracing / verbose logging](./docs/advanced.md#tracing--verbose-logging)

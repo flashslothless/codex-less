@@ -1,6 +1,5 @@
 packages:
   - docs
-  - sdk/typescript
 
 ignoredBuiltDependencies:
   - esbuild
